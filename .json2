@@ -1,0 +1,9 @@
+{
+  "name": "mesa-digital",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Mesa Digital – cardápios digitais com QR code (Vercel + Upstash Redis)",
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node tests/run-tests.mjs" }
+}
