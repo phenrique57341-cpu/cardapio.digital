@@ -148,7 +148,9 @@ var $=function(i){return document.getElementById(i)},esc=function(s){return Stri
 var brl=function(n){return 'R$ '+Number(n).toFixed(2).replace('.',',')};
 var BASE='https://claude.ai/artifact/Qn6qnaGnRC5HhyHhtZZ4Mx',skip=false;
 function hashOf(p){return p.replace(/^\/+/,'').replace(/\//g,'.')}
-function route(p){var bk=document.getElementById('bk');if(bk)bk.remove();document.body.classList.remove('fire');load();if(typeof p!=='string')p=location.hash.replace(/^#\/?/,'');if(REMOTE&&location.pathname==='/cardapios'){window.scrollTo(0,0);return viewDirectory()}
+function route(p){var bk=document.getElementById('bk');if(bk)bk.remove();document.body.classList.remove('fire');load();if(typeof p!=='string')p=location.hash.replace(/^#\/?/,'');
+ if(NOSERVER){var pth=location.pathname,hh=p.split(/[\/.]/)[0];if(hh==='loja')return viewNoServer(true);if(hh==='cardapios'||pth==='/cardapios'||/^\/cardapio\//.test(pth))return viewNoServer(false)}
+ if(REMOTE&&location.pathname==='/cardapios'){window.scrollTo(0,0);return viewDirectory()}
  if(REMOTE&&/^\/cardapio\//.test(location.pathname)){var sl=decodeURIComponent(location.pathname.split('/')[2]||''),ms=new URLSearchParams(location.search).get('mesa')||'';window.scrollTo(0,0);return viewPublic(sl,ms)}
  var h=p.split(/[\/.]/);window.scrollTo(0,0);
  if(h[0]==='m')return viewMenu(h[1],h[2]);
@@ -195,9 +197,16 @@ function api(m,p,b){var h={'content-type':'application/json'},t=null;try{t=local
 function adopt(v){v.tables=(v.tables||[]).map(function(n){return{n:n,tok:rnd(12)}});v.active=true;S.users[v.email]={id:v.id};S.menus[v.id]=v;me=v.email}
 function pushVendor(){clearTimeout(pushT);pushT=setTimeout(function(){var u=S.users[me];if(!u)return;var m=S.menus[u.id];
  api('PUT','/api/vendor',{name:m.name,phone:m.phone,hours:m.hours,color:m.color,logo:m.logo,insta:m.insta||'',face:m.face||'',about:m.about||'',address:m.address||'',hidden:!!m.hidden,items:m.items,tables:m.tables.map(function(t){return t.n})}).then(function(r){if(r&&r.vendor&&r.vendor.items){var mp={};r.vendor.items.forEach(function(i){mp[i.id]=i.img});m.items.forEach(function(i){if(mp[i.id]!==undefined)i.img=mp[i.id]})}toast('Salvo! Os clientes já veem as alterações.')}).catch(function(e){toast('Não foi possível salvar no servidor: '+e.message)})},250)}
-function boot(){fetch('/api/health',{cache:'no-store'}).then(function(r){return r.text()}).then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}REMOTE=!!(j&&j.ok)}).catch(function(){}).then(function(){
+var NOSERVER=false,HW='';
+function boot(){fetch('/api/health',{cache:'no-store'}).then(function(r){HW='código '+r.status;return r.text()}).then(function(t){var j=null;try{j=JSON.parse(t)}catch(e){}REMOTE=!!(j&&j.ok);if(!REMOTE&&/código 200/.test(HW))HW+=', devolveu uma página em vez do servidor'}).catch(function(){HW='sem resposta'}).then(function(){NOSERVER=!REMOTE&&!isFramed();
  if(!REMOTE){route();return}S={users:{},menus:{}};var t=null;try{t=localStorage.getItem('md_token')}catch(e){}
  if(t&&!/^\/cardapio\//.test(location.pathname)){api('GET','/api/me').then(function(v){adopt(v);route()}).catch(function(){try{localStorage.removeItem('md_token')}catch(e){}me=null;route()})}else route()})}
+function viewNoServer(owner){document.body.classList.add('fire');window.scrollTo(0,0);
+ app.innerHTML='<div class="n" style="text-align:center;padding-top:70px"><a class="logo" href="#/" style="justify-content:center">'+logoH()+'</a>'+(owner?
+ '<h2 style="margin-top:26px">Servidor não conectado</h2><p>O site abriu, mas a parte que guarda os dados não respondeu ('+esc(HW)+'). Por isso <b>nada seria salvo para os clientes</b>, e o cadastro e o painel ficam bloqueados.</p><div class="card" style="text-align:left"><b>Como resolver (Vercel):</b><ul class="ck"><li>Publique o projeto <b>completo</b>, com as pastas <b>api</b> e <b>public</b> e o arquivo <b>vercel.json</b></li><li>Crie a variável <b>AUTH_SECRET</b></li><li>Conecte o banco <b>Upstash Redis</b> ao projeto</li><li>Faça o <b>Redeploy</b> e abra <b>/api/health</b>: deve mostrar ok, db e auth verdadeiros</li></ul><p style="margin:8px 0 0;font-size:13px">Passo a passo no README do projeto.</p></div>':
+ '<h2 style="margin-top:26px">Cardápios indisponíveis</h2><p>Não foi possível carregar os cardápios agora. Tente novamente em instantes.</p>')+
+ '<div class="row" style="justify-content:center;margin-top:16px"><button id="nsr">Tentar de novo</button><a class="btn s" href="#/">Página inicial</a></div></div>';
+ $('nsr').onclick=function(){location.reload()}}
 function viewPublic(sl,ms){document.body.classList.add('fire');app.innerHTML='<div class="n" style="text-align:center;padding-top:90px"><p>Carregando cardápio...</p></div>';
  api('GET','/api/public/'+encodeURIComponent(sl)).then(function(d){var k='pub:'+sl;d.active=true;d.slug=sl;d.tables=(d.tables||[]).map(function(n){return{n:n,tok:('0'+n).slice(-2)}});S.menus[k]=d;viewMenu(k,ms)}).catch(function(e){app.innerHTML='<div class="n" style="text-align:center;padding-top:80px"><h2>Cardápio indisponível</h2><p>'+esc(e.message)+'</p><button id="rt">Tentar de novo</button></div>';$('rt').onclick=function(){viewPublic(sl,ms)}})}
 function hl(p){return location.pathname==='/cardapios'?'/'+(p?'#'+hashOf(p):''):'#/'+p}
