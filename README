@@ -1,0 +1,90 @@
+# Mesa Digital – cardápios digitais com QR code
+
+Site + servidor prontos para **GitHub + Vercel**. O cliente só **vê** o cardápio (sem login, sem carrinho). O dono da loja entra no painel, cadastra produtos com foto e, ao **Salvar**, qualquer pessoa já vê o cardápio.
+
+## Como o projeto é organizado
+
+```
+public/index.html        O site inteiro (página inicial, painel do dono, cardápios, QR code)
+api/[...path].js         Função da Vercel: recebe tudo que começa com /api/
+api/_lib/app.mjs         Regras do servidor (cadastro, login, produtos, fotos, vitrine)
+api/_lib/db.mjs          Conexão com o banco (Upstash Redis)
+vercel.json              Rotas /cardapios e /cardapio/<loja> + cabeçalhos de segurança
+package.json             Sem dependências externas
+.env.example             Modelo das variáveis (sem valores reais)
+tests/                   Testes automáticos (npm test)
+```
+
+## O que JÁ está implementado
+
+- Servidor de verdade (função da Vercel) com cadastro, login, recuperação de senha, produtos, fotos, ocultar/mostrar loja e vitrine "Ver cardápios".
+- Dados salvos no **banco de dados** (nada de `localStorage` como banco). O navegador guarda só a sessão.
+- Sessão validada **no servidor** (token assinado com `AUTH_SECRET`); senhas com `scrypt` e sal; código de recuperação também em hash.
+- Cada dono só altera a **própria** loja (o dono vem sempre do token, nunca do que o navegador envia).
+- Bloqueio temporário após 8 tentativas de senha erradas (15 minutos).
+- Fotos gravadas à parte e servidas em `/api/img/...` (cache longo; o site não reenvia fotos que não mudaram).
+- Diagnóstico simples: abrir `/api/health` mostra se o servidor, o banco e a `AUTH_SECRET` estão configurados. O site não exibe avisos fixos na tela.
+- Visual, textos, cores e navegação do site foram preservados.
+
+## O que DEPENDE DE VOCÊ (não dá para eu fazer por você)
+
+1. Criar a conta no GitHub e enviar os arquivos.
+2. Importar o repositório na Vercel.
+3. Criar a variável `AUTH_SECRET`.
+4. Criar e conectar o banco **Upstash Redis** ao projeto na Vercel.
+5. Fazer o deploy e conferir `/api/health`.
+
+> Contas e produtos que estavam na hospedagem antiga **não são transferidos** (o banco é outro). Cada dono precisa se cadastrar de novo.
+
+---
+
+## Passo a passo
+
+### 1) Baixar os arquivos
+Baixe o ZIP do projeto e descompacte. Você terá a pasta `vercel-site` com a estrutura acima.
+
+### 2) Colocar no GitHub
+1. Crie uma conta em https://github.com e clique em **New** para criar um repositório (pode ser privado).
+2. No repositório, clique em **Add file → Upload files**.
+3. Arraste **o conteúdo** da pasta `vercel-site` (inclusive as pastas `api`, `public`, `tests` e os arquivos `.gitignore` e `.env.example`). O GitHub mantém as subpastas.
+4. Confira se aparecem `api/[...path].js`, `api/_lib/app.mjs`, `api/_lib/db.mjs` e `public/index.html`. Clique em **Commit changes**.
+
+### 3) Importar na Vercel
+1. Entre em https://vercel.com com a conta do GitHub.
+2. **Add New → Project → Import** o repositório.
+3. Em **Framework Preset** deixe **Other**. Não precisa mexer em *Build Command* nem *Output Directory* (o `vercel.json` já define).
+4. **Ainda não clique em Deploy**: configure as variáveis (próximo passo).
+
+### 4) Variável AUTH_SECRET
+`AUTH_SECRET` é a chave que assina a sessão de quem entra no painel. Sem ela o servidor recusa cadastro e login.
+
+1. Gere um texto aleatório de 32+ caracteres. No computador: `openssl rand -hex 32` (ou digite uma frase longa e aleatória).
+2. Na tela de importação (ou depois em **Settings → Environment Variables**): **Name** `AUTH_SECRET`, **Value** o texto gerado, marque Production, Preview e Development.
+3. **Nunca** coloque esse valor no GitHub nem no código.
+
+### 5) Banco de dados (Upstash Redis)
+1. No projeto da Vercel, abra a aba **Storage** → **Create Database** (ou **Marketplace**) → escolha **Upstash** → **Redis** → crie (o plano gratuito basta para começar).
+2. Conecte o banco ao projeto (**Connect Project**). A Vercel cria sozinha as variáveis `KV_REST_API_URL` e `KV_REST_API_TOKEN` (o código também aceita `UPSTASH_REDIS_REST_URL` e `UPSTASH_REDIS_REST_TOKEN`).
+3. Confira em **Settings → Environment Variables** se elas aparecem.
+
+### 6) Primeiro deploy
+Clique em **Deploy** (ou, se já tinha feito, vá em **Deployments → ⋯ → Redeploy** depois de criar as variáveis).
+
+### 7) Verificar se está funcionando
+1. Abra `https://SEU-PROJETO.vercel.app/api/health`. O correto é: `{"ok":true,"db":true,"auth":true}`.
+   - `"db":false` → o banco não está conectado (passo 5) ou as credenciais estão erradas.
+   - `"auth":false` → falta a `AUTH_SECRET` (passo 4). Depois de criar variáveis, faça **Redeploy**.
+   - Página de erro/404 → a pasta `api` não foi enviada ao GitHub (confira o passo 2).
+2. Abra o site, clique em **Cadastrar**, crie a conta e **guarde o código de recuperação**.
+3. Cadastre um produto com foto e clique em **Salvar produto**.
+4. Em outro aparelho (ou janela anônima), abra o site → **Ver cardápios**: a loja e o produto devem aparecer.
+5. Na aba **Meu QR Code** (abrindo o painel no endereço do site publicado), baixe o QR code: ele abre a página inicial do site.
+
+## Rodar no seu computador (opcional)
+- `npm test` roda 39 testes da API (precisa só do Node 20+; não instala nada).
+- Para testar com a Vercel de verdade: `npx vercel dev` (cria um `.env.local` copiando o `.env.example`).
+
+## Limites conhecidos
+- Cada requisição da Vercel aceita até 4,5 MB: o site já reduz as fotos antes de enviar.
+- Sem e-mail de recuperação: a senha é redefinida com o **código de recuperação** mostrado no cadastro.
+- Se o site publicado não conseguir falar com o servidor, o cadastro e o painel mostram a tela **"Servidor não conectado"** (e os visitantes veem "Cardápios indisponíveis"). Isso evita salvar dados só no aparelho, onde os clientes nunca veriam. Só a prévia do Claude usa o modo local.
